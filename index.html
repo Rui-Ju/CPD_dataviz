@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<link rel="shortcut icon" href="#" />
+<html>
+
+
+<head>
+  <meta charset="UTF-8">
+  <title>demographics visualization</title>
+  <script src="https://d3js.org/d3.v4.js" charset="utf-8"></script>
+  <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js'></script>
+  <!-- Load color scale -->
+  <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+</head>
+
+
+<style>
+#TITLE {
+    background-color: #369;
+    color: white;
+    padding: 5px;
+    font-size: 18px;
+    font-family: Arial;
+    font-style: bold;
+}
+
+div.vertical{
+  margin-left: -100px;
+  position: absolute;
+  width: 215px;
+  transform: rotate(-90deg);
+  -webkit-transform: rotate(-90deg); /* Safari/Chrome */
+  -moz-transform: rotate(-90deg);    /* Firefox */
+  -o-transform: rotate(-90deg);      /* Opera */
+  -ms-transform: rotate(-90deg);     /* IE 9 */
+}
+
+
+
+  .names {
+  fill: none;
+  stroke: #fff;
+  stroke-linejoin: round;
+  }
+
+    /* Tooltip CSS */
+    .d3-tip {
+    line-height: 1.5;
+    font-weight: 400;
+    font-family:"avenir next", Arial, sans-serif;
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #FFA500;
+    border-radius: 1px;
+    pointer-events: none;
+    }
+
+    /* Creates a small triangle extender for the tooltip */
+    .d3-tip:after {
+      box-sizing: border-box;
+      display: inline;
+      font-size: 8px;
+      width: 100%;
+      line-height: 1.5;
+      color: rgba(0, 0, 0, 0.6);
+      position: absolute;
+      pointer-events: none;
+
+    }
+
+    /* Northward tooltips */
+    .d3-tip.n:after {
+      content: "\25BC";
+      margin: -1px 0 0 0;
+      top: 100%;
+      left: 0;
+      text-align: center;
+    }
+
+    /* Eastward tooltips */
+    .d3-tip.e:after {
+      content: "\25C0";
+      margin: -4px 0 0 0;
+      top: 50%;
+      left: -8px;
+    }
+
+    /* Southward tooltips */
+    .d3-tip.s:after {
+      content: "\25B2";
+      margin: 0 0 1px 0;
+      top: -8px;
+      left: 0;
+      text-align: center;
+    }
+
+    /* Westward tooltips */
+    .d3-tip.w:after {
+      content: "\25B6";
+      margin: -4px 0 0 -1px;
+      top: 50%;
+      left: 100%;
+    }
+
+/*    text{
+      pointer-events:none;
+    }*/
+
+    .details{
+      color:white;
+    }
+
+</style>
+
+    <table style='border-collapse: collapse' width=1248px>
+        <tr>
+            <td id='TITLE' width ="78%">Demographics by Community Area </td>
+        </tr>
+    </table>
+
+
+    <div>
+        <span id="selMetric">Metric </span>
+        <select id="metricDD"></select>
+    </div>
+
+    <script src="http://d3js.org/d3.v4.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.9.1/d3-tip.js"></script>
+<script>
+var format = d3.format(",");
+
+// Set tooltips
+var tip = d3.tip()
+            .attr('class', 'd3-tip')
+            .offset([-10, 0])
+            .html(function(d) {
+              return "<strong>Community: </strong><span class='details'>" + d.properties.community + "<br></span>" + "<strong>Population: </strong><span class='details'>" + d.Population + "<br></span>" +"<strong>Program Score: </strong><span class='details'>" + d["Program Score"]+ "<br></span>" + "<strong>Maintenance Score: </strong><span class='details'>" + d["Maintenance Score"];
+            })
+
+var margin = {top: 0, right: 0, bottom: 0, left: 0},
+            width = 1200 - margin.left - margin.right,
+            height = 700 - margin.top - margin.bottom;
+
+var legendPos = {
+      x: 100 - margin.right / 2,
+      y: 370,
+      width: 10,
+      height: 20
+    };
+
+var colorScale;
+var myColor = d3.scaleSequential(d3.interpolateBlues);
+
+var path = d3.geoPath();
+
+var svg = d3.select("body")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .append('g')
+            .attr('class', 'map');
+
+
+var projection = d3.geoAlbers()
+                    .center([0, 41.83])
+                    .rotate([87.65, 0])
+                    .parallels([40, 45])
+                    .scale(100000)
+                    .translate([width / 1.5, height / 2]);
+
+var path = d3.geoPath().projection(projection);
+
+svg.call(tip);
+var dataset;
+var Population = {};
+var Pr_score = {};
+var Maintenance_score = {};
+var zzz = {};
+var metrics = ["Program Score", "Maintenance Score"];
+
+queue()
+    .defer(d3.json, "https://raw.githubusercontent.com/Rui-Ju/CPD_dataviz/master/communities.json")
+    .defer(d3.tsv, "https://raw.githubusercontent.com/Rui-Ju/CPD_dataviz/master/demographics.tsv")
+    .await(ready);
+function ready(error, data, demographics) {
+
+
+  demographics.forEach(function(d) { Population[d.area_num_1] = +d["2010_POP"]; });
+  demographics.forEach(function(d) { Pr_score[d.area_num_1] = Math.round(+d["pr_score"]); });
+  demographics.forEach(function(d) { Maintenance_score[d.area_num_1] = Math.round(+d["maintenance_score"]); });
+  demographics.forEach(function(d) { zzz[d.area_num_1] = Math.round(+d["2000_POP"]); });
+  data.features.forEach(function(d) { d.Population = Population[d.properties.area_num_1] });
+  data.features.forEach(function(d) { d["Program Score"] = Pr_score[d.properties.area_num_1] });
+  data.features.forEach(function(d) { d["Maintenance Score"] = Maintenance_score[d.properties.area_num_1] });
+  data.features.forEach(function(d) { d.zzz = zzz[d.properties.area_num_1] });
+  dataset = data;
+
+  var colorScale = d3.scaleQuantize()
+                     .domain(d3.extent(dataset.features, function(d){return d["Program Score"];}))
+                     .range([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]);
+
+
+  svg.append("g")
+      .attr("class", "communities")
+    .selectAll("path")
+      .data(data.features)
+    .enter().append("path")
+      .attr("d", path)
+      .style("fill", function(d) {return myColor(colorScale(d["Program Score"])); })
+      .style('stroke', 'white')
+      .style('stroke-width', 1.5)
+      .style("opacity",0.8)
+      // tooltips
+        .style("stroke","white")
+        .style('stroke-width', 0.3)
+        .on('mouseover',function(d){
+          tip.show(d);
+
+          d3.select(this)
+            .style("opacity", 1)
+            .style("stroke","white")
+            .style("stroke-width",3);
+        })
+        .on('mouseout', function(d){
+          tip.hide(d);
+
+          d3.select(this)
+            .style("opacity", 0.8)
+            .style("stroke","white")
+            .style("stroke-width",0.3);
+        });
+
+  svg.append("path")
+      .datum(topojson.mesh(data.features, function(a, b) {return a.properties.area_num_1 !== b.properties.area_num_1; }))
+       // .datum(topojson.mesh(data.features, function(a, b) { return a !== b; }))
+      .attr("class", "names")
+      .attr("d", path);
+
+
+  svg.append("text")
+  .attr("x", 80)
+  .attr("y", 350)
+  .text("Program Score")
+  .style("font-weight", "bold");
+
+
+  var colorLegend = svg.selectAll(".legend")
+                       .data(colorScale.range())
+                       .enter()
+                       .append("g")
+                       .attr("class", "legend")
+                       .attr("transform", function(d, i) { return "translate(" + legendPos.x + "," + (legendPos.y + i * legendPos.height) + ")"; });
+  colorLegend.append("rect")
+               .attr("width",  legendPos.width)
+               .attr("height", legendPos.height)
+               .style("fill", function(d) { return myColor(d); });
+
+  var formatDecimal = d3.format('.1f');
+  function getVal(rangeValue) {
+          return formatDecimal(colorScale.invertExtent(rangeValue)[1]);
+  }
+
+  colorLegend.append("text")
+             .attr("x", 15)
+             .attr("y", 20)
+             .style('font-size', 12)
+             .text(function(d) { return getVal(d); });
+
+
+  createMetric(metrics);
+  createListener();
+
+}
+
+function createMetric(data){
+    d3.select("#metricDD")
+    .selectAll("option")
+    .data(data)
+    .enter()
+    .append("option")
+    .attr("value", function(d) {return d;})
+    .text(function(d) { return d; });
+
+}
+
+function createListener(){
+
+  d3.select("#metricDD").on("change", function(){
+    var selMetric = d3.select("#metricDD").node().value;
+    updateMap(selMetric);
+
+ });
+}
+
+
+function updateMap(selMetric){
+  var colorScale = d3.scaleQuantize()
+                     .domain(d3.extent(dataset.features, function(d){return d[selMetric];}))
+                     .range([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]);
+
+  d3.select("svg").remove();
+  var svg = d3.select("body")
+              .append("svg")
+              .attr("width", width)
+              .attr("height", height)
+              .append('g')
+              .attr('class', 'map');
+
+  svg.append("g")
+      .attr("class", "communities")
+    .selectAll("path")
+      .data(dataset.features)
+    .enter().append("path")
+      .attr("d", path)
+      .style("fill", function(d) {return myColor(colorScale(d[selMetric])); })
+      .style('stroke', 'white')
+      .style('stroke-width', 1.5)
+      .style("opacity",0.8)
+      // tooltips
+        .style("stroke","white")
+        .style('stroke-width', 0.3)
+        .on('mouseover',function(d){
+          tip.show(d);
+
+          d3.select(this)
+            .style("opacity", 1)
+            .style("stroke","white")
+            .style("stroke-width",3);
+        })
+        .on('mouseout', function(d){
+          tip.hide(d);
+
+          d3.select(this)
+            .style("opacity", 0.8)
+            .style("stroke","white")
+            .style("stroke-width",0.3);
+        });
+
+  svg.append("path")
+      .datum(topojson.mesh(dataset.features, function(a, b) {return a.properties.area_num_1 !== b.properties.area_num_1; }))
+       // .datum(topojson.mesh(data.features, function(a, b) { return a !== b; }))
+      .attr("class", "names")
+      .attr("d", path);
+
+  svg.append("text")
+  .attr("x", 80)
+  .attr("y", 350)
+  .text(selMetric)
+  .style("font-weight", "bold");
+
+  var colorLegend = svg.selectAll(".legend")
+                       .data(colorScale.range())
+                       .enter()
+                       .append("g")
+                       .attr("class", "legend")
+                       .attr("transform", function(d, i) { return "translate(" + legendPos.x + "," + (legendPos.y + i * legendPos.height) + ")"; });
+  colorLegend.append("rect")
+               .attr("width",  legendPos.width)
+               .attr("height", legendPos.height)
+               .style("fill", function(d) { return myColor(d); });
+
+  var formatDecimal = d3.format('.1f');
+  function getVal(rangeValue) {
+          return formatDecimal(colorScale.invertExtent(rangeValue)[1]);
+  }
+
+  colorLegend.append("text")
+             .attr("x", 15)
+             .attr("y", 20)
+             .style('font-size', 12)
+             .text(function(d) { return getVal(d); });
+
+
+}
+
+
+
+</script>
+</body>
+
+
+
+</html>
